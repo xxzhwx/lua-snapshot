@@ -91,6 +91,10 @@ ismarked(lua_State *dL, const void *p) {
 	return true;
 }
 
+/*
+返回栈顶元素的C指针
+返回NULL则弹出栈顶元素，否则留待mark_xxx函数使用并由mark_xxx函数弹出
+*/
 static const void *
 readobject(lua_State *L, lua_State *dL, const void *parent, const char *desc) {
 	int t = lua_type(L, -1);
@@ -119,8 +123,9 @@ readobject(lua_State *L, lua_State *dL, const void *parent, const char *desc) {
 
 	const void * p = lua_topointer(L, -1);
 	if (ismarked(dL, p)) {
-		lua_rawgetp(dL, tidx, p);
+		lua_rawgetp(dL, tidx, p); // get t[p], where t is the table at index `tidx`
 		if (!lua_isnil(dL,-1)) {
+			// t[p][parent] = desc
 			lua_pushstring(dL,desc);
 			lua_rawsetp(dL, -2, parent);
 		}
@@ -129,6 +134,7 @@ readobject(lua_State *L, lua_State *dL, const void *parent, const char *desc) {
 		return NULL;
 	}
 
+	// t[p] = { [parent] = desc, }, where t is the table at index `tidx`
 	lua_newtable(dL);
 	lua_pushstring(dL,desc);
 	lua_rawsetp(dL, -2, parent);
@@ -354,7 +360,7 @@ pdesc(lua_State *L, lua_State *dL, int idx, const char * typename) {
 	while (lua_next(dL, idx) != 0) {
 		luaL_Buffer b;
 		luaL_buffinit(L, &b);
-		const void * key = lua_touserdata(dL, -2);
+		const void * key = lua_touserdata(dL, -2); //lua_next依次把key和value入栈，key在-2，value在-1（栈顶）
 		if (idx == FUNCTION) {
 			lua_rawgetp(dL, SOURCE, key);
 			if (lua_isnil(dL, -1)) {
@@ -378,7 +384,7 @@ pdesc(lua_State *L, lua_State *dL, int idx, const char * typename) {
 			luaL_addchar(&b,'\n');
 		}
 		lua_pushnil(dL);
-		while (lua_next(dL, -2) != 0) {
+		while (lua_next(dL, -2) != 0) { //nil入栈后value就在-2，value是一个表，格式是{[parent]=desc,}
 			const void * parent = lua_touserdata(dL,-2);
 			const char * desc = luaL_checkstring(dL,-1);
 			gen_table_desc(dL, &b, parent, desc);
@@ -413,7 +419,7 @@ snapshot(lua_State *L) {
 	}
 	lua_pushvalue(L, LUA_REGISTRYINDEX);
 	mark_table(L, dL, NULL, "[registry]");
-	gen_result(L, dL);
+	gen_result(L, dL); //创建了一个table，最后返回这个table，table格式：{[被引用对象]=被引用对象描述\nparent : desc\nparent : desc\n ...}
 	lua_close(dL);
 	return 1;
 }
