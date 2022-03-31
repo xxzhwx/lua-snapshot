@@ -94,6 +94,8 @@ ismarked(lua_State *dL, const void *p) {
 /*
 返回栈顶元素的C指针
 返回NULL则弹出栈顶元素，否则留待mark_xxx函数使用并由mark_xxx函数弹出
+
+所有复杂对象（table,thread,function,userdata）都会通过该函数记录下它被谁引用
 */
 static const void *
 readobject(lua_State *L, lua_State *dL, const void *parent, const char *desc) {
@@ -128,6 +130,8 @@ readobject(lua_State *L, lua_State *dL, const void *parent, const char *desc) {
 			// t[p][parent] = desc
 			lua_pushstring(dL,desc);
 			lua_rawsetp(dL, -2, parent);
+
+			printf("%p[%s] ==> %p:%s\n", p, lua_typename(L,t), parent, desc);
 		}
 		lua_pop(dL,1);
 		lua_pop(L,1);
@@ -139,6 +143,8 @@ readobject(lua_State *L, lua_State *dL, const void *parent, const char *desc) {
 	lua_pushstring(dL,desc);
 	lua_rawsetp(dL, -2, parent);
 	lua_rawsetp(dL, tidx, p);
+
+	printf("%p[%s] => %p:%s\n", p, lua_typename(L,t), parent, desc);
 
 	return p;
 }
@@ -298,7 +304,7 @@ mark_thread(lua_State *L, lua_State *dL, const void * parent, const char *desc) 
 				const char * name = lua_getlocal(cL, &ar, i);
 				if (name == NULL)
 					break;
-				snprintf(tmp, sizeof(tmp), "%s : %s:%d",name,ar.short_src,ar.currentline);
+				snprintf(tmp, sizeof(tmp), "%s : %s:%d",name,ar.short_src,ar.currentline); // e.g: tmp : dump.lua:38
 				mark_object(cL, dL, t, tmp);
 			}
 		}
